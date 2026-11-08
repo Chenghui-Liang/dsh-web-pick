@@ -20,11 +20,12 @@ window.__ModuleLoader__.load({
     const OVERLAY_URL = '/dsh-web-pick/overlay.js'
     const REPORT_URL = '/dsh-web-pick/report'
     const BATCH_URL = '/dsh-web-pick/batch'
+    const SHOT_URL = '/dsh-web-pick/shots'
     const POLL_MS = 700
     const SCAN_MS = 600
-    const RETAIN_SOURCE = 'controllerOperation'
 
     let currentSessionId = ''
+    let currentActions = null
     let overlaySource = ''
     let overlayFetchedAt = 0
 
@@ -147,12 +148,12 @@ window.__ModuleLoader__.load({
     const KIND_LABEL = { element: '元素', region: '区域' }
 
     /** One line per pick: kind, locator, visible text + optional note. */
-    function formatBatch(batch, imageCount = 0) {
+    function formatBatch(batch, shotFiles = []) {
       const items = Array.isArray(batch && batch.items) ? batch.items : []
       const page = text(batch && batch.url, 200)
       const title = text(batch && batch.title, 40)
       const head = [`【网页选取】${items.length} 条${title ? ` · ${title}` : ''}`, `页面：${page}`]
-      if (imageCount > 0) head.push(`截图：${imageCount} 张（编号对应）`)
+      if (shotFiles.length > 0) head.push(`截图：${shotFiles.length} 张（本地文件，见末尾）`)
       const body = items
         .map((item) => {
           const kind = KIND_LABEL[item.kind] || '元素'
@@ -176,7 +177,11 @@ window.__ModuleLoader__.load({
           return lines.join('\n')
         })
         .join('\n\n')
-      return `${head.join('\n')}\n\n${body}`
+      const tail =
+        shotFiles.length > 0
+          ? `\n\n截图（本地文件，可直接用 read_image 打开）：\n${shotFiles.map((file) => `- ${file}`).join('\n')}`
+          : ''
+      return `${head.join('\n')}\n\n${body}${tail}`
     }
 
     /**
@@ -318,12 +323,44 @@ window.__ModuleLoader__.load({
       return { images, skipped: missing }
     }
 
-    function buildContent(message, images) {
-      const parts = [{ type: 'text', text: message }]
-      for (const image of images) {
-        parts.push({ type: 'image', mediaType: image.mediaType, data: image.data, name: image.name })
+    /** Persist the per-item crops next to the draft, so they stay openable. */
+    async function saveShots(element, batch) {
+      const { images } = await captureImages(element, batch)
+      if (!images.length) return []
+      try {
+        const response = await fetch(SHOT_URL, {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({ images }),
+        })
+        if (!response.ok) throw new Error(`HTTP ${response.status}`)
+        const saved = await response.json()
+        return Array.isArray(saved && saved.files) ? saved.files : []
+      } catch (error) {
+        report('shot-save', { ok: false, error: error && error.message ? error.message : String(error) })
+        return []
       }
-      return parts
+    }
+
+    /**
+     * Put the batch into the composer draft instead of sending it: the user gets
+     * to read and edit before anything reaches the agent.
+     */
+    function insertIntoDraft(actions, text) {
+      try {
+        const span = actions.captureInsertion()
+        if (actions.insertText(text, span)) return true
+        report('insert', { ok: false, mode: 'insertText', error: 'insertText refused' })
+      } catch (error) {
+        report('insert', { ok: false, mode: 'insertText', error: error && error.message ? error.message : String(error) })
+      }
+      try {
+        actions.setDraft(text)
+        return true
+      } catch (error) {
+        report('insert', { ok: false, mode: 'setDraft', error: error && error.message ? error.message : String(error) })
+        return false
+      }
     }
 
     async function submitBatch(ctx, batch, element) {
@@ -336,61 +373,46 @@ window.__ModuleLoader__.load({
           body: JSON.stringify(batch),
         })
       } catch {
-        /* the chat message below is the primary channel */
+        /* the draft below is the primary channel */
       }
-      const sessionId = currentSessionId
-      if (!sessionId) {
-        report('submit', { ok: false, error: 'no open session to receive the batch', url: batch && batch.url })
-        notifyPage(element, { ok: false, error: '没有找到正在打开的对话' })
+      const actions = currentActions
+      if (!actions) {
+        report('insert', { ok: false, error: 'composer not mounted', url: batch && batch.url })
+        notifyPage(element, { ok: false, error: '没有找到输入框（对话可能没打开）' })
         return
       }
-      const { images } = await captureImages(element, batch)
-      const message = formatBatch(batch, images.length)
-      const send = (parts) =>
-        ctx.sessions.using(sessionId, { source: RETAIN_SOURCE }, async (reference) => {
-          const binding = await reference.ready
-          // `ISession.prompt` answers a RemoteResult instead of throwing on a
-          // business refusal, so an `ok: false` result is promoted to an error
-          // here; the page must never be told a refused batch was accepted.
-          const result = await binding.session.prompt(parts, 'queue')
-          if (result && typeof result === 'object' && result.ok === false) {
-            const failure = result.error || {}
-            throw new Error(String(failure.message || failure.code || 'prompt refused'))
-          }
-          return result
-        })
-      try {
-        try {
-          await send(buildContent(message, images))
-        } catch (error) {
-          if (!images.length) throw error
-          // A model without image input must still receive the picks.
-          report('submit', {
-            ok: false,
-            retry: 'text-only',
-            error: error && error.message ? error.message : String(error),
-          })
-          await send(buildContent(message, []))
-          notifyPage(element, { ok: true, count: items.length, images: 0, note: '图片未能发送，已只发文字' })
-          report('submit', { ok: true, count: items.length, images: 0, url: batch && batch.url })
-          return
-        }
-        report('submit', { ok: true, count: items.length, images: images.length, url: batch && batch.url })
-        notifyPage(element, { ok: true, count: items.length, images: images.length })
-      } catch (error) {
-        report('submit', {
-          ok: false,
-          error: error && error.message ? error.message : String(error),
-          url: batch && batch.url,
-        })
-        notifyPage(element, { ok: false, error: error && error.message ? error.message : String(error) })
+      const files = await saveShots(element, batch)
+      const message = formatBatch(batch, files)
+      if (!insertIntoDraft(actions, message)) {
+        notifyPage(element, { ok: false, error: '输入框当前不可写（可能正在发送上一条）' })
+        return
       }
+      try {
+        if (typeof actions.persistDraft === 'function') actions.persistDraft()
+      } catch {
+        /* persistence is best effort */
+      }
+      try {
+        if (typeof actions.notify === 'function') {
+          actions.notify('info', `网页选取 ${items.length} 条已放入输入框，检查后再发送`)
+        }
+      } catch {
+        /* a notice failing must not undo the insertion */
+      }
+      report('submit', {
+        ok: true,
+        mode: 'draft',
+        count: items.length,
+        images: files.length,
+        url: batch && batch.url,
+      })
+      notifyPage(element, { ok: true, count: items.length, images: files.length })
     }
 
     /* ------------------------------------------------------------------- life */
 
     return {
-      inject: ['slots', 'sessions'],
+      inject: ['slots'],
       apply(ctx) {
         /** @type {WeakMap<Element, { timer: number, injected: boolean, attempts: number }>} */
         const watched = new WeakMap()
@@ -472,6 +494,10 @@ window.__ModuleLoader__.load({
         function SessionProbe(props) {
           try {
             if (props && typeof props.sessionId === 'string') currentSessionId = props.sessionId
+            // The composer's own action face: insertText/setDraft write the draft
+            // without submitting it, which is what "send to the conversation"
+            // now means — the user reviews first.
+            if (props && props.inputActions) currentActions = props.inputActions
           } catch {
             /* ignore */
           }
@@ -486,7 +512,7 @@ window.__ModuleLoader__.load({
           report('slot', { ok: false, error: error && error.message })
         }
 
-        report('boot', { href: location.href, version: '1.1.0' })
+        report('boot', { href: location.href, version: '1.2.0' })
 
         const cleanup = () => {
           disposed = true

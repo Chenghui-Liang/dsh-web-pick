@@ -5,14 +5,14 @@
  * injecting). Self-contained IIFE: no imports, one namespaced global, safe to
  * re-run on every navigation because `boot()` takes over an existing copy.
  *
- * UX in one sentence: one ⌖ icon at the top-right of the page turns the
+ * UX in one sentence: one ⌖ pill at the bottom-right of the page turns the
  * pointer into a picker — click an element, or drag a rectangle to frame a
  * region; both open a small comment card on the spot; every pick lands in a
- * per-page list, and 「发送到对话」 hands the batch to the GUI, which posts it as
- * one message into the conversation the user is reading.
+ * per-page list, and 「放入输入框」 hands the batch to the GUI, which inserts it
+ * into the composer draft so the user reviews it before sending.
  */
 ;(() => {
-  const VERSION = '1.1.0'
+  const VERSION = '1.2.0'
   const NS = 'dsh-web-pick'
   const ROOT_ATTR = 'data-dsh-webpick-root'
   const MAX_TEXT = 90
@@ -450,7 +450,7 @@
     countButton = h('button', {
       class: 'countbtn',
       style: 'display:none',
-      title: '查看本页选取，确认后一次性发送到对话',
+      title: '查看本页选取，确认后一次性放进输入框',
       onclick: () => (state.listOpen ? closeList() : openList()),
     })
 
@@ -473,7 +473,7 @@
     const total = state.items.length
     countButton.style.display = total ? '' : 'none'
     countButton.textContent = String(total)
-    countButton.title = `查看 ${total} 条选取，确认后一次性发送到对话`
+    countButton.title = `查看 ${total} 条选取，确认后一次性放进输入框`
   }
 
   function showToast(message, tone = 'ok', ttl = 2200) {
@@ -985,7 +985,7 @@
       state.items.length ? h('button', { class: 'btn ghost', text: '清空', onclick: () => clearAll() }) : null,
       h('button', {
         class: 'btn primary',
-        text: `发送到对话 (${state.items.length})`,
+        text: `放入输入框 (${state.items.length})`,
         style: state.items.length ? '' : 'opacity:.45;cursor:default',
         onclick: () => submitAll(),
       }),
@@ -1057,7 +1057,7 @@
       }),
     }
     pushOutbox(payload)
-    showToast(`正在发送 ${state.items.length} 条选取…`, 'ok', 2000)
+    showToast(`正在放入输入框（${state.items.length} 条）…`, 'ok', 2000)
     setMode('')
     closeList()
     renderPill()
@@ -1150,7 +1150,13 @@
         showToast(String(action.note), 'warn', 4000)
         return
       }
-      showToast(images > 0 ? `已发送（含 ${images} 张截图），切回对话即可看到` : '已发送，切回对话即可看到', 'ok', 2400)
+      showToast(
+        images > 0
+          ? `已放入输入框（含 ${images} 张截图，存本地），检查后发送`
+          : '已放入输入框，检查后发送',
+        'ok',
+        2600,
+      )
       return
     }
     showToast(`发送失败：${action.error || '未知原因'}（选取还在列表里）`, 'warn', 4000)

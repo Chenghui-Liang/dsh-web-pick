@@ -19,9 +19,10 @@
  * Read-only for the user's project: no build step, no dependency.
  */
 
-import { readFile } from 'node:fs/promises'
+import { readFile, mkdir, writeFile } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
 import { fileURLToPath } from 'node:url'
-import { dirname, resolve } from 'node:path'
+import { dirname, join, resolve } from 'node:path'
 
 export const name = 'dsh-web-pick'
 export const inject = ['webServer', 'tools']
@@ -207,6 +208,42 @@ export function apply(ctx) {
           payload: { url: payload && payload.url, items: payload && payload.items && payload.items.length },
         })
         sendJson(res, 200, { ok: true })
+      } catch (error) {
+        sendJson(res, 400, { ok: false, error: error && error.message ? error.message : String(error) })
+      }
+    },
+  })
+
+  // Screenshots travel as base64 from the GUI half; writing them here keeps the
+  // per-item crops usable from the draft without pasting binary into the editor
+  // (the composer's attachment intake is internal, its text insertion is not).
+  route({
+    kind: 'exact',
+    path: '/dsh-web-pick/shots',
+    handler: async (req, res) => {
+      if (req.method !== 'POST') {
+        plain(res, 405, 'method not allowed')
+        return
+      }
+      try {
+        const raw = await readBody(req)
+        const payload = JSON.parse(raw)
+        const images = Array.isArray(payload && payload.images) ? payload.images.slice(0, 6) : []
+        const stamp = new Date().toISOString().replace(/[:.]/gu, '-').slice(0, 19)
+        const dir = join(tmpdir(), 'dsh-web-pick', stamp)
+        const files = []
+        for (let index = 0; index < images.length; index += 1) {
+          const image = images[index] || {}
+          if (typeof image.data !== 'string' || !image.data) continue
+          const buffer = Buffer.from(image.data, 'base64')
+          if (!buffer.length) continue
+          const target = join(dir, `pick-${index + 1}.jpg`)
+          await mkdir(dir, { recursive: true })
+          await writeFile(target, buffer)
+          files.push(target)
+        }
+        remember({ kind: 'shots', payload: { count: files.length, dir } })
+        sendJson(res, 200, { ok: true, files })
       } catch (error) {
         sendJson(res, 400, { ok: false, error: error && error.message ? error.message : String(error) })
       }
