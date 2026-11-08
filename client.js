@@ -163,8 +163,6 @@ window.__ModuleLoader__.load({
           } else {
             const hook = stableSelector(item.selector)
             parts.push(`\`${hook || item.tag || 'element'}\``)
-            const label = text(item.text, 24)
-            if (label) parts.push(`「${label}」`)
           }
           if (item.comment) parts.push(`· ${text(item.comment, 400)}`)
           const lines = [parts.join(' ')]
