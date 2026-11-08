@@ -12,7 +12,7 @@
  * into the composer draft so the user reviews it before sending.
  */
 ;(() => {
-  const VERSION = '1.2.0'
+  const VERSION = '1.3.0'
   const NS = 'dsh-web-pick'
   const ROOT_ATTR = 'data-dsh-webpick-root'
   const MAX_TEXT = 90

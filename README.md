@@ -22,7 +22,7 @@ dsh plugin --profile desktop add github:Chenghui-Liang/dsh-web-pick
 2. **点一下元素** → 立刻在元素下方弹出小卡片，可以补一句说明；也可直接「保存」不留说明。弹卡片期间，元素的高亮框和尺寸标一直留在页面上（滚动时跟着走）。
 3. **按住拖动** → 框选一块区域，松手同样**当场弹出卡片**；虚线的选区框也留在原地，方便对照着写这块要改什么。
 4. 每条保存后，胶囊右边数字 +1；点开是列表（定位 / 编辑说明 / 删除 / 清空）。
-5. 点 **「放入输入框」** —— 整批写成一段文字**塞进对话输入框**（用编辑器自己的 `insertText`，不覆盖你已经打的字），并给出截图在本地的路径。**不会自动发送**，你检查/删改后自己按回车。
+5. 点 **「放入输入框」** —— 整批写成一段文字**塞进对话输入框**（用编辑器自己的 `insertText`，不覆盖你已经打的字），每条截图则像**粘贴图片**一样挂进输入框的附件栏。**不会自动发送**，你检查/删改后自己按回车。
 6. `Esc` 退出选取模式或关掉卡片。
 
 放进去的文字大概是这个形状：
@@ -30,17 +30,14 @@ dsh plugin --profile desktop add github:Chenghui-Liang/dsh-web-pick
 ```text
 【网页选取】2 条 · GitHub - Chenghui-Liang
 页面：https://github.com/Chenghui-Liang
-截图：2 张（本地文件，见末尾）
+截图：2 张（已附在下面）
 
 1. 元素 div `#id` 「保存」 · 字号大一点
    源码：src/pages/Budget.tsx:42
 2. 区域 320×180 · 这块留白太大
-
-截图（本地文件，可直接用 read_image 打开）：
-- C:\Users\pc\AppData\Local\Temp\dsh-web-pick\2026-11-09T00-12-33\pick-1.jpg
 ```
 
-为什么截图不直接贴进输入框：输入框的附件入口是编辑器内部的（只接受它自己创建的附件 id），插件能用的公开接口只有文字插入。所以截图先落到 `%TEMP%\dsh-web-pick\<时间戳>\`，把路径写进文字里——agent 收到后用 `read_image` 就能看，你自己也能点开。
+截图怎么进的输入框：不去碰编辑器内部状态，而是找到输入框自己的 `<input type="file">`，用 `DataTransfer` 装好图片、触发它的 `change` —— 和用户点「+」选文件走的是同一条 intake 通道，所以缩略图、上传进度、删除按钮都是原生行为。
 
 选取按「页面」分开存（`sessionStorage`，key 是 origin + pathname）：刷新页面还在，跳到别的页面各存各的。
 
@@ -48,8 +45,8 @@ dsh plugin --profile desktop add github:Chenghui-Liang/dsh-web-pick
 
 | 文件 | 作用 |
 | --- | --- |
-| `index.js` | Host 半：`GET /dsh-web-pick/overlay.js`（每次现读文件，改完不用重启）、`POST /report`、`POST /batch`、`POST /shots`（截图落盘）、`GET /status`，以及 `webpick_status` 诊断工具。 |
-| `client.js` | Client 半：扫描 `<webview>`、注入 overlay、每 700ms 收一次选取、裁截图存盘，再用 `inputActions.insertText` 把这一批写进当前会话的输入框。 |
+| `index.js` | Host 半：`GET /dsh-web-pick/overlay.js`（每次现读文件，改完不用重启）、`POST /report`、`POST /batch`、`GET /status`，以及 `webpick_status` 诊断工具。 |
+| `client.js` | Client 半：扫描 `<webview>`、注入 overlay、每 700ms 收一次选取、裁截图，再把截图塞进输入框附件栏、把文字 `insertText` 进输入框。 |
 | `web/overlay.js` | 注入页面里的选取层（纯 IIFE，Shadow DOM 隔离，无依赖）。 |
 
 ## 原理（为什么不用改站点）
@@ -72,7 +69,6 @@ webview.capturePage()                 // 每条一张裁剪截图
 - 内置浏览器面板关掉/切走后 `webview` 不在 DOM 里，选取层随之暂停（回来会重新注入）。
 - SPA 内部路由切换后，旧条目的定位可能失效（列表里点定位会提示）。
 - 单批最多 6 张截图，超出部分只写文字。
-- 截图落在系统临时目录，系统清理临时文件后会消失。
 - 输入框里已有内容时，文字插在光标处（不覆盖、不清空）；插不进去时（比如正在发送）会报错，选取留在列表里可重试。
 - 改 `client.js` 需要刷新一次 DSH 窗口；改 `web/overlay.js` 只要重新加载被看的页面。
 

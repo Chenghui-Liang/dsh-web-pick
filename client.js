@@ -20,7 +20,6 @@ window.__ModuleLoader__.load({
     const OVERLAY_URL = '/dsh-web-pick/overlay.js'
     const REPORT_URL = '/dsh-web-pick/report'
     const BATCH_URL = '/dsh-web-pick/batch'
-    const SHOT_URL = '/dsh-web-pick/shots'
     const POLL_MS = 700
     const SCAN_MS = 600
 
@@ -148,12 +147,12 @@ window.__ModuleLoader__.load({
     const KIND_LABEL = { element: '元素', region: '区域' }
 
     /** One line per pick: kind, locator, visible text + optional note. */
-    function formatBatch(batch, shotFiles = []) {
+    function formatBatch(batch, imageCount = 0) {
       const items = Array.isArray(batch && batch.items) ? batch.items : []
       const page = text(batch && batch.url, 200)
       const title = text(batch && batch.title, 40)
       const head = [`【网页选取】${items.length} 条${title ? ` · ${title}` : ''}`, `页面：${page}`]
-      if (shotFiles.length > 0) head.push(`截图：${shotFiles.length} 张（本地文件，见末尾）`)
+      if (imageCount > 0) head.push(`截图：${imageCount} 张（已附在下面）`)
       const body = items
         .map((item) => {
           const kind = KIND_LABEL[item.kind] || '元素'
@@ -177,11 +176,7 @@ window.__ModuleLoader__.load({
           return lines.join('\n')
         })
         .join('\n\n')
-      const tail =
-        shotFiles.length > 0
-          ? `\n\n截图（本地文件，可直接用 read_image 打开）：\n${shotFiles.map((file) => `- ${file}`).join('\n')}`
-          : ''
-      return `${head.join('\n')}\n\n${body}${tail}`
+      return `${head.join('\n')}\n\n${body}`
     }
 
     /**
@@ -323,22 +318,44 @@ window.__ModuleLoader__.load({
       return { images, skipped: missing }
     }
 
-    /** Persist the per-item crops next to the draft, so they stay openable. */
-    async function saveShots(element, batch) {
-      const { images } = await captureImages(element, batch)
-      if (!images.length) return []
+    /**
+     * Attach the crops to the draft the same way a paste does: hand the
+     * composer's own file input a DataTransfer and fire `change`, which is the
+     * shipped intake path (upload, rail thumbnail, removable by the user).
+     * @returns how many files the composer accepted.
+     */
+    function composerFileInput() {
+      const inCard = document.querySelector('[data-composer-card] input[type="file"]')
+      if (inCard instanceof HTMLInputElement) return inCard
+      const all = Array.from(document.querySelectorAll('input[type="file"]')).filter(
+        (node) => node instanceof HTMLInputElement && !node.disabled,
+      )
+      return all.length ? all[all.length - 1] : null
+    }
+
+    function attachImagesToDraft(images) {
+      if (!images.length) return 0
+      const input = composerFileInput()
+      if (!(input instanceof HTMLInputElement) || input.disabled) {
+        report('attach', { ok: false, error: 'composer file input not found' })
+        return 0
+      }
       try {
-        const response = await fetch(SHOT_URL, {
-          method: 'POST',
-          headers: { 'content-type': 'application/json' },
-          body: JSON.stringify({ images }),
-        })
-        if (!response.ok) throw new Error(`HTTP ${response.status}`)
-        const saved = await response.json()
-        return Array.isArray(saved && saved.files) ? saved.files : []
+        const transfer = new DataTransfer()
+        for (const image of images) {
+          const binary = atob(image.data)
+          const bytes = new Uint8Array(binary.length)
+          for (let index = 0; index < binary.length; index += 1) bytes[index] = binary.charCodeAt(index)
+          transfer.items.add(new File([bytes], image.name || 'pick.jpg', { type: image.mediaType || 'image/jpeg' }))
+        }
+        if (!transfer.files.length) return 0
+        input.files = transfer.files
+        input.dispatchEvent(new Event('change', { bubbles: true }))
+        report('attach', { ok: true, count: transfer.files.length })
+        return transfer.files.length
       } catch (error) {
-        report('shot-save', { ok: false, error: error && error.message ? error.message : String(error) })
-        return []
+        report('attach', { ok: false, error: error && error.message ? error.message : String(error) })
+        return 0
       }
     }
 
@@ -381,8 +398,9 @@ window.__ModuleLoader__.load({
         notifyPage(element, { ok: false, error: '没有找到输入框（对话可能没打开）' })
         return
       }
-      const files = await saveShots(element, batch)
-      const message = formatBatch(batch, files)
+      const { images } = await captureImages(element, batch)
+      const attached = attachImagesToDraft(images)
+      const message = formatBatch(batch, attached)
       if (!insertIntoDraft(actions, message)) {
         notifyPage(element, { ok: false, error: '输入框当前不可写（可能正在发送上一条）' })
         return
@@ -394,7 +412,10 @@ window.__ModuleLoader__.load({
       }
       try {
         if (typeof actions.notify === 'function') {
-          actions.notify('info', `网页选取 ${items.length} 条已放入输入框，检查后再发送`)
+          actions.notify(
+            'info',
+            `网页选取 ${items.length} 条已放入输入框${attached > 0 ? `，${attached} 张截图已附上` : ''}，检查后再发送`,
+          )
         }
       } catch {
         /* a notice failing must not undo the insertion */
@@ -403,10 +424,10 @@ window.__ModuleLoader__.load({
         ok: true,
         mode: 'draft',
         count: items.length,
-        images: files.length,
+        images: attached,
         url: batch && batch.url,
       })
-      notifyPage(element, { ok: true, count: items.length, images: files.length })
+      notifyPage(element, { ok: true, count: items.length, images: attached })
     }
 
     /* ------------------------------------------------------------------- life */
@@ -512,7 +533,7 @@ window.__ModuleLoader__.load({
           report('slot', { ok: false, error: error && error.message })
         }
 
-        report('boot', { href: location.href, version: '1.2.0' })
+        report('boot', { href: location.href, version: '1.3.0' })
 
         const cleanup = () => {
           disposed = true

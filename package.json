@@ -1,7 +1,7 @@
 {
   "name": "dsh-web-pick",
-  "version": "1.2.0",
-  "description": "Pick an element or drag a region inside DeepSeek Harness's desktop built-in browser, then insert the batch, with screenshot paths, into the conversation draft for review.",
+  "version": "1.3.0",
+  "description": "Pick an element or drag a region inside DeepSeek Harness's desktop built-in browser, then attach the crops and insert the notes into the conversation draft for review.",
   "type": "module",
   "license": "MIT",
   "author": "Chenghui-Liang",
