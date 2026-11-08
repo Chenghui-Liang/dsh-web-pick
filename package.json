@@ -1,0 +1,49 @@
+{
+  "name": "dsh-web-pick",
+  "version": "1.1.0",
+  "description": "Pick an element or drag a region inside DeepSeek Harness's desktop built-in browser, then send the batch, with cropped screenshots, to the current conversation.",
+  "type": "module",
+  "license": "MIT",
+  "author": "Chenghui-Liang",
+  "keywords": [
+    "dsh",
+    "dsh-plugin",
+    "deepseek-harness",
+    "built-in-browser",
+    "webview",
+    "element-picker"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Chenghui-Liang/dsh-web-pick.git"
+  },
+  "homepage": "https://github.com/Chenghui-Liang/dsh-web-pick#readme",
+  "bugs": {
+    "url": "https://github.com/Chenghui-Liang/dsh-web-pick/issues"
+  },
+  "exports": {
+    ".": "./index.js",
+    "./client": "./client.js",
+    "./web/overlay.js": "./web/overlay.js",
+    "./locale/*.json": "./locale/*.json",
+    "./icon": "./icon.svg"
+  },
+  "files": [
+    "index.js",
+    "client.js",
+    "cordis.patch.yml",
+    "web/overlay.js",
+    "locale/*.json",
+    "icon.svg",
+    "README.md",
+    "LICENSE",
+    "NOTICE"
+  ],
+  "dsh": {
+    "bundle": { "patch": "./cordis.patch.yml" },
+    "client": {
+      "platform": "web",
+      "immediately": true
+    }
+  }
+}

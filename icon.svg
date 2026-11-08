@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64" role="img" aria-label="Web Picker">
+  <rect x="4" y="4" width="56" height="56" rx="14" fill="#2f6feb"/>
+  <g stroke="#ffffff" stroke-width="3" fill="none" stroke-linecap="round">
+    <path d="M20 14v6M14 20h6"/>
+    <path d="M44 14v6M38 20h6" transform="translate(6 0)"/>
+    <path d="M20 50v-6M14 44h6"/>
+    <path d="M44 50v-6M38 44h6" transform="translate(6 0)"/>
+  </g>
+  <rect x="24" y="22" width="16" height="19" rx="4" fill="#ffffff" fill-opacity="0.92"/>
+  <circle cx="32" cy="31" r="2.4" fill="#2f6feb"/>
+</svg>

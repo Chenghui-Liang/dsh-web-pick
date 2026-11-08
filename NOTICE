@@ -1,0 +1,17 @@
+NOTICE
+======
+
+dsh-web-pick is MIT-licensed (see LICENSE).
+
+The webview injection approach — injecting an overlay into the built-in
+browser's Electron <webview> from a Client-half plugin, polling an outbox, and
+cropping capturePage() screenshots per item — is adapted from:
+  dsh-webannotate by FleatherYu
+  https://github.com/FleatherYu/dsh-webannotate
+  MIT License, Copyright (c) FleatherYu
+
+The overlay source in this repository is an independent rewrite with a
+different interaction model (one pick button, element click, drag-to-frame
+region, no quote mode); the shared parts are the injection/injection-policy
+ideas and the screenshot pipeline. FleatherYu's MIT notice is retained here
+for attribution.
