@@ -32,7 +32,7 @@ dsh plugin --profile desktop add github:Chenghui-Liang/dsh-web-pick
 页面：https://github.com/Chenghui-Liang
 截图：2 张（已附在下面）
 
-1. 元素 div `#id` 「保存」 · 字号大一点
+1. 元素 div `#id` · 字号大一点
    源码：src/pages/Budget.tsx:42
 2. 区域 320×180 · 这块留白太大
 ```

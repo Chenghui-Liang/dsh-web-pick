@@ -531,7 +531,7 @@ window.__ModuleLoader__.load({
           report('slot', { ok: false, error: error && error.message })
         }
 
-        report('boot', { href: location.href, version: '1.3.0' })
+        report('boot', { href: location.href, version: '1.3.1' })
 
         const cleanup = () => {
           disposed = true
